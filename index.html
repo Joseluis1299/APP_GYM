@@ -1998,7 +1998,10 @@
         <div class="set-row">
           <div class="set-row-head">
             <span class="series-index">Serie ${index + 1}</span>
-            ${entry.series.length > 1 ? `<button type="button" class="button button-danger button-inline" data-action="remove-set" data-id="${exercise.id}" data-set-index="${index}">Quitar</button>` : ""}
+            <div class="top-row">
+              <button type="button" class="button button-secondary button-inline" data-action="duplicate-set" data-id="${exercise.id}" data-set-index="${index}">Duplicar</button>
+              ${entry.series.length > 1 ? `<button type="button" class="button button-danger button-inline" data-action="remove-set" data-id="${exercise.id}" data-set-index="${index}">Quitar</button>` : ""}
+            </div>
           </div>
           <div class="series-grid">
             <div class="field">
@@ -2642,6 +2645,15 @@
       if (action === "add-set") {
         const entry = getExerciseEntry(actionEl.dataset.id);
         entry.series.push(createExerciseSet());
+        persistState();
+        render();
+      }
+
+      if (action === "duplicate-set") {
+        const entry = getExerciseEntry(actionEl.dataset.id);
+        const setIndex = Number(actionEl.dataset.setIndex);
+        if (!Number.isInteger(setIndex) || setIndex < 0 || setIndex >= entry.series.length) return;
+        entry.series.splice(setIndex + 1, 0, createExerciseSet(entry.series[setIndex]));
         persistState();
         render();
       }
