@@ -794,6 +794,148 @@
       color: var(--accent);
     }
 
+    .chart-overview-grid,
+    .chart-stats-grid,
+    .chart-mix-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .chart-overview-grid,
+    .chart-mix-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chart-stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .chart-hero-box,
+    .chart-stat-box,
+    .chart-mix-item {
+      position: relative;
+      overflow: hidden;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .chart-hero-box::before,
+    .chart-stat-box::before,
+    .chart-mix-item::before {
+      content: "";
+      position: absolute;
+      inset: auto -12% -48% auto;
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.32;
+      pointer-events: none;
+    }
+
+    .chart-hero-box.accent-green::before,
+    .chart-stat-box.accent-green::before {
+      background: rgba(22, 240, 164, 0.42);
+    }
+
+    .chart-hero-box.accent-blue::before,
+    .chart-stat-box.accent-blue::before {
+      background: rgba(49, 199, 255, 0.42);
+    }
+
+    .chart-hero-box.accent-gold::before,
+    .chart-stat-box.accent-gold::before {
+      background: rgba(255, 211, 101, 0.38);
+    }
+
+    .chart-hero-box.accent-orange::before,
+    .chart-stat-box.accent-orange::before {
+      background: rgba(255, 122, 79, 0.4);
+    }
+
+    .chart-hero-box span,
+    .chart-stat-box span,
+    .chart-mix-item span {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .chart-hero-box strong,
+    .chart-stat-box strong,
+    .chart-mix-item strong {
+      display: block;
+      font-size: 1.06rem;
+      line-height: 1.15;
+    }
+
+    .chart-hero-box small,
+    .chart-stat-box small,
+    .chart-mix-item small {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .chart-card {
+      position: relative;
+    }
+
+    .chart-card-glow::after {
+      content: "";
+      position: absolute;
+      inset: 16px;
+      border-radius: 22px;
+      pointer-events: none;
+      background: radial-gradient(circle at top right, rgba(22, 240, 164, 0.12), transparent 42%);
+      opacity: 0.9;
+    }
+
+    .chart-card-blue::after {
+      background: radial-gradient(circle at top right, rgba(49, 199, 255, 0.14), transparent 42%);
+    }
+
+    .chart-card-gold::after {
+      background: radial-gradient(circle at top right, rgba(255, 211, 101, 0.14), transparent 42%);
+    }
+
+    .chart-controls {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .range-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .range-chip {
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.84rem;
+    }
+
+    .range-chip.active {
+      color: var(--text);
+      border-color: rgba(22, 240, 164, 0.34);
+      background: linear-gradient(145deg, rgba(22, 240, 164, 0.2), rgba(49, 199, 255, 0.08));
+    }
+
     .chart-wrap {
       position: relative;
       min-height: 260px;
@@ -901,13 +1043,16 @@
     @media (max-width: 420px) {
       .hero-grid,
       .summary-grid,
-      .profile-grid {
+      .profile-grid,
+      .chart-overview-grid,
+      .chart-mix-grid {
         grid-template-columns: 1fr;
       }
 
       .group-grid,
       .field-grid,
-      .series-grid {
+      .series-grid,
+      .chart-stats-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1229,7 +1374,12 @@
     const installBanner = document.getElementById("installBanner");
     const headerStatus = document.getElementById("headerStatus");
     const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
-    const chartRefs = { exercise: null, cardio: null };
+    const chartRefs = { exercise: null, cardio: null, cardioMix: null };
+    const chartWindowOptions = [
+      { value: "6", label: "6" },
+      { value: "12", label: "12" },
+      { value: "all", label: "Todo" }
+    ];
 
     let toastTimer = null;
     let storageWarning = "";
@@ -1305,7 +1455,8 @@
         },
         ui: {
           activeTab: "entrenar",
-          chartExerciseId: ""
+          chartExerciseId: "",
+          chartWindow: "all"
         },
         activeProfileId: initialProfile.id,
         profiles: [initialProfile],
@@ -1352,7 +1503,8 @@
         },
         ui: {
           activeTab: parsed?.ui?.activeTab || fallback.ui.activeTab,
-          chartExerciseId: parsed?.ui?.chartExerciseId || fallback.ui.chartExerciseId
+          chartExerciseId: parsed?.ui?.chartExerciseId || fallback.ui.chartExerciseId,
+          chartWindow: parsed?.ui?.chartWindow || fallback.ui.chartWindow
         },
         activeProfileId,
         profiles,
@@ -1931,17 +2083,67 @@
       return Object.values(map).sort((a, b) => b.bestOneRm - a.bestOneRm);
     }
 
+    function getChartWindowLimit() {
+      const rawValue = state.ui.chartWindow;
+      if (rawValue === "all") return Infinity;
+      const parsed = Number(rawValue);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : Infinity;
+    }
+
+    function sliceSeriesByWindow(series) {
+      const limit = getChartWindowLimit();
+      if (!Number.isFinite(limit) || series.length <= limit) {
+        return series;
+      }
+      return series.slice(-limit);
+    }
+
+    function formatTrendValue(value, suffix = "kg") {
+      if (!Number.isFinite(value) || value === 0) {
+        return "Sin cambio";
+      }
+      const sign = value > 0 ? "+" : "";
+      return sign + fmtNumber(value, 1) + " " + suffix;
+    }
+
     function getExerciseHistorySeries(exerciseId) {
       return state.history
         .map((session) => {
           const exercise = (session.exercises || []).find((item) => item.id === exerciseId);
           if (!exercise) return null;
           return {
+            savedAt: session.savedAt,
             x: fmtDate(session.savedAt, { day: "2-digit", month: "short" }),
-            y: exercise.weight || 0
+            y: exercise.weight || 0,
+            oneRm: exercise.oneRm || 0
           };
         })
         .filter(Boolean);
+    }
+
+    function getExerciseChartSummary(exerciseId) {
+      const fullSeries = getExerciseHistorySeries(exerciseId);
+      const visibleSeries = sliceSeriesByWindow(fullSeries);
+      const firstPoint = visibleSeries[0] || null;
+      const lastPoint = visibleSeries[visibleSeries.length - 1] || null;
+      const bestWeight = visibleSeries.reduce((max, point) => Math.max(max, point.y || 0), 0);
+      const bestOneRm = visibleSeries.reduce((max, point) => Math.max(max, point.oneRm || 0), 0);
+      const averageWeight = visibleSeries.length
+        ? visibleSeries.reduce((sum, point) => sum + (point.y || 0), 0) / visibleSeries.length
+        : 0;
+      const delta = firstPoint && lastPoint ? (lastPoint.y || 0) - (firstPoint.y || 0) : 0;
+      return {
+        fullSeries,
+        visibleSeries,
+        sessions: fullSeries.length,
+        visibleSessions: visibleSeries.length,
+        bestWeight,
+        bestOneRm,
+        averageWeight,
+        lastWeight: lastPoint?.y || 0,
+        delta,
+        lastDate: lastPoint?.savedAt || ""
+      };
     }
 
     function getCardioWeeklySeries() {
@@ -1956,7 +2158,46 @@
         }
         weekly[key].minutes += cardioDuration;
       });
-      return Object.values(weekly);
+      return Object.entries(weekly)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([, value]) => value);
+    }
+
+    function getCardioMachineBreakdown() {
+      const totals = {};
+      state.history.forEach((session) => {
+        (session.cardio || []).forEach((entry) => {
+          const duration = num(entry.duration);
+          if (!duration) return;
+          const machineName = cardioIndex[entry.id]?.name || entry.name || entry.id;
+          totals[machineName] = (totals[machineName] || 0) + duration;
+        });
+      });
+      return Object.entries(totals)
+        .map(([name, minutes]) => ({ name, minutes }))
+        .sort((a, b) => b.minutes - a.minutes);
+    }
+
+    function getCardioChartSummary() {
+      const fullSeries = getCardioWeeklySeries();
+      const visibleSeries = sliceSeriesByWindow(fullSeries);
+      const totalMinutes = fullSeries.reduce((sum, point) => sum + (point.minutes || 0), 0);
+      const visibleMinutes = visibleSeries.reduce((sum, point) => sum + (point.minutes || 0), 0);
+      const bestWeek = visibleSeries.reduce((best, point) => (point.minutes > (best?.minutes || 0) ? point : best), null);
+      const averageWeek = visibleSeries.length
+        ? visibleMinutes / visibleSeries.length
+        : 0;
+      const machineBreakdown = getCardioMachineBreakdown();
+      return {
+        fullSeries,
+        visibleSeries,
+        totalMinutes,
+        visibleMinutes,
+        averageWeek,
+        bestWeek,
+        machineBreakdown,
+        topMachine: machineBreakdown[0] || null
+      };
     }
 
     function getWeekStart(dateValue) {
@@ -1975,6 +2216,10 @@
       if (chartRefs.cardio) {
         chartRefs.cardio.destroy();
         chartRefs.cardio = null;
+      }
+      if (chartRefs.cardioMix) {
+        chartRefs.cardioMix.destroy();
+        chartRefs.cardioMix = null;
       }
     }
 
@@ -2517,42 +2762,174 @@
       }
 
       const availableExercises = Object.keys(exerciseIndex).filter((exerciseId) => getExerciseHistorySeries(exerciseId).length);
-      if (!state.ui.chartExerciseId || !availableExercises.includes(state.ui.chartExerciseId)) {
-        state.ui.chartExerciseId = availableExercises[0] || "";
-        persistState();
-      }
+      const selectedExerciseId = availableExercises.includes(state.ui.chartExerciseId)
+        ? state.ui.chartExerciseId
+        : (availableExercises[0] || "");
+      state.ui.chartExerciseId = selectedExerciseId;
+      const exerciseSummary = getExerciseChartSummary(selectedExerciseId);
+      const cardioSummary = getCardioChartSummary();
+      const topMachineCards = cardioSummary.machineBreakdown.slice(0, 4).map((item) => `
+        <article class="chart-mix-item">
+          <span>${escapeHtml(item.name)}</span>
+          <strong>${fmtNumber(item.minutes)} min</strong>
+          <small>${cardioSummary.totalMinutes ? fmtNumber((item.minutes / cardioSummary.totalMinutes) * 100, 1) : 0}% del cardio total</small>
+        </article>
+      `).join("");
+      const rangeHtml = chartWindowOptions.map((option) => `
+        <button
+          type="button"
+          class="range-chip ${state.ui.chartWindow === option.value ? "active" : ""}"
+          data-action="set-chart-window"
+          data-chart-window="${option.value}"
+        >
+          ${escapeHtml(option.label)}
+        </button>
+      `).join("");
 
       return `
         <section class="section-card panel">
           <div class="section-head">
             <div>
               <h2>Gráficas de progreso</h2>
-              <p>Peso máximo por sesión y volumen semanal de cardio dentro del perfil ${escapeHtml(activeProfileName)}.</p>
+              <p>Vista visual del progreso de ${escapeHtml(activeProfileName)} con récords, tendencia y cardio acumulado.</p>
             </div>
             <span class="tag">${state.history.length} sesiones</span>
           </div>
-          <div class="chart-card">
-            <p class="field-title">Ejercicio</p>
-            <select class="chart-select" data-kind="chart" data-field="chartExerciseId">
-              ${availableExercises.map((exerciseId) => `
-                <option value="${exerciseId}" ${exerciseId === state.ui.chartExerciseId ? "selected" : ""}>${escapeHtml(exerciseIndex[exerciseId].name)}</option>
-              `).join("")}
-            </select>
+
+          <div class="chart-overview-grid">
+            <article class="chart-hero-box accent-green">
+              <span>Sesiones del perfil</span>
+              <strong>${state.history.length}</strong>
+              <small>Todo lo que ves aquí pertenece solo a ${escapeHtml(activeProfileName)}.</small>
+            </article>
+            <article class="chart-hero-box accent-blue">
+              <span>Récord actual</span>
+              <strong>${fmtNumber(exerciseSummary.bestWeight, 1)} kg</strong>
+              <small>${selectedExerciseId ? escapeHtml(exerciseIndex[selectedExerciseId]?.name || "Ejercicio") : "Sin ejercicio"}.</small>
+            </article>
+            <article class="chart-hero-box accent-gold">
+              <span>Cardio total</span>
+              <strong>${fmtNumber(cardioSummary.totalMinutes)} min</strong>
+              <small>${cardioSummary.machineBreakdown.length} máquinas registradas en el historial.</small>
+            </article>
+            <article class="chart-hero-box accent-orange">
+              <span>Ventana visible</span>
+              <strong>${state.ui.chartWindow === "all" ? "Todo" : state.ui.chartWindow + " bloques"}</strong>
+              <small>Filtra las últimas sesiones o semanas para ver mejor la tendencia.</small>
+            </article>
+          </div>
+
+          <div class="chart-card chart-card-glow">
+            <div class="section-head">
+              <div>
+                <h3>Fuerza por ejercicio</h3>
+                <p>Línea principal de peso máximo y línea secundaria de 1RM estimado.</p>
+              </div>
+              <span class="tag">${exerciseSummary.sessions} registros</span>
+            </div>
+            <div class="chart-controls">
+              <div>
+                <p class="field-title">Ejercicio</p>
+                <select class="chart-select" data-kind="chart" data-field="chartExerciseId">
+                  ${availableExercises.map((exerciseId) => `
+                    <option value="${exerciseId}" ${exerciseId === selectedExerciseId ? "selected" : ""}>${escapeHtml(exerciseIndex[exerciseId].name)}</option>
+                  `).join("")}
+                </select>
+              </div>
+              <div>
+                <p class="field-title">Ventana visible</p>
+                <div class="range-row">${rangeHtml}</div>
+              </div>
+            </div>
+            <div class="chart-stats-grid">
+              <article class="chart-stat-box accent-green">
+                <span>Récord</span>
+                <strong>${fmtNumber(exerciseSummary.bestWeight, 1)} kg</strong>
+                <small>Mejor peso dentro del rango visible.</small>
+              </article>
+              <article class="chart-stat-box accent-gold">
+                <span>1RM top</span>
+                <strong>${fmtNumber(exerciseSummary.bestOneRm, 1)} kg</strong>
+                <small>Estimación más alta por fórmula de Epley.</small>
+              </article>
+              <article class="chart-stat-box accent-blue">
+                <span>Media</span>
+                <strong>${fmtNumber(exerciseSummary.averageWeight, 1)} kg</strong>
+                <small>Promedio de los puntos visibles.</small>
+              </article>
+              <article class="chart-stat-box accent-orange">
+                <span>Evolución</span>
+                <strong>${formatTrendValue(exerciseSummary.delta)}</strong>
+                <small>${exerciseSummary.lastDate ? "Último dato " + fmtDate(exerciseSummary.lastDate, { day: "2-digit", month: "short" }) : "Añade más registros."}</small>
+              </article>
+            </div>
             <div class="chart-wrap">
               <canvas id="exerciseChart"></canvas>
             </div>
+            <p class="tip">La línea verde representa el peso máximo por sesión y la dorada tu 1RM estimado.</p>
           </div>
 
-          <div class="chart-card">
+          <div class="chart-card chart-card-blue chart-card-glow">
             <div class="section-head">
               <div>
                 <h3>Cardio por semana</h3>
-                <p>Duración acumulada semanal para todas las máquinas.</p>
+                <p>Minutos acumulados por semana dentro del rango visible.</p>
               </div>
+              <span class="tag">${cardioSummary.visibleSeries.length} semanas</span>
             </div>
-            <div class="chart-wrap">
-              <canvas id="cardioChart"></canvas>
+            <div class="chart-stats-grid">
+              <article class="chart-stat-box accent-blue">
+                <span>Total visible</span>
+                <strong>${fmtNumber(cardioSummary.visibleMinutes)} min</strong>
+                <small>Minutos sumados en las semanas que estás viendo.</small>
+              </article>
+              <article class="chart-stat-box accent-green">
+                <span>Media semanal</span>
+                <strong>${fmtNumber(cardioSummary.averageWeek, 1)} min</strong>
+                <small>Promedio de cardio por semana visible.</small>
+              </article>
+              <article class="chart-stat-box accent-orange">
+                <span>Mejor semana</span>
+                <strong>${fmtNumber(cardioSummary.bestWeek?.minutes || 0)} min</strong>
+                <small>${cardioSummary.bestWeek?.label || "Todavía sin cardio suficiente"}.</small>
+              </article>
+              <article class="chart-stat-box accent-gold">
+                <span>Máquina top</span>
+                <strong>${escapeHtml(cardioSummary.topMachine?.name || "Sin datos")}</strong>
+                <small>${cardioSummary.topMachine ? fmtNumber(cardioSummary.topMachine.minutes) + " min acumulados" : "Guarda sesiones de cardio."}</small>
+              </article>
             </div>
+            ${cardioSummary.visibleSeries.length ? `
+              <div class="chart-wrap">
+                <canvas id="cardioChart"></canvas>
+              </div>
+            ` : `
+              <div class="empty-state">
+                Cuando guardes cardio, aquí verás qué semanas estás sumando más minutos.
+              </div>
+            `}
+          </div>
+
+          <div class="chart-card chart-card-gold chart-card-glow">
+            <div class="section-head">
+              <div>
+                <h3>Mix de cardio</h3>
+                <p>Reparto visual de tus minutos entre máquinas.</p>
+              </div>
+              <span class="tag">${cardioSummary.machineBreakdown.length} tipos</span>
+            </div>
+            ${cardioSummary.machineBreakdown.length ? `
+              <div class="chart-wrap">
+                <canvas id="cardioMixChart"></canvas>
+              </div>
+              <div class="chart-mix-grid">
+                ${topMachineCards}
+              </div>
+            ` : `
+              <div class="empty-state">
+                Añade cardio en varias sesiones para desbloquear el reparto por máquina.
+              </div>
+            `}
           </div>
         </section>
       `;
@@ -2714,54 +3091,162 @@
 
       const exerciseCanvas = document.getElementById("exerciseChart");
       const cardioCanvas = document.getElementById("cardioChart");
-      if (!exerciseCanvas || !cardioCanvas) return;
+      const cardioMixCanvas = document.getElementById("cardioMixChart");
+      if (!exerciseCanvas) return;
 
-      const exerciseSeries = getExerciseHistorySeries(state.ui.chartExerciseId);
+      const exerciseSeries = getExerciseChartSummary(state.ui.chartExerciseId).visibleSeries;
+      const exerciseCtx = exerciseCanvas.getContext("2d");
+      const exerciseGradient = exerciseCtx.createLinearGradient(0, 0, 0, 280);
+      exerciseGradient.addColorStop(0, "rgba(22, 240, 164, 0.34)");
+      exerciseGradient.addColorStop(1, "rgba(22, 240, 164, 0.02)");
+
       chartRefs.exercise = new Chart(exerciseCanvas, {
         type: "line",
         data: {
           labels: exerciseSeries.map((point) => point.x),
-          datasets: [{
-            label: "Peso máximo (kg)",
-            data: exerciseSeries.map((point) => point.y),
-            borderColor: "#16f0a4",
-            backgroundColor: "rgba(22, 240, 164, 0.12)",
-            borderWidth: 3,
-            pointRadius: 4,
-            pointHoverRadius: 5,
-            fill: true,
-            tension: 0.28
-          }]
+          datasets: [
+            {
+              label: "Peso máximo",
+              data: exerciseSeries.map((point) => point.y),
+              borderColor: "#16f0a4",
+              backgroundColor: exerciseGradient,
+              borderWidth: 3,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              pointBackgroundColor: "#16f0a4",
+              pointBorderColor: "#09111f",
+              pointBorderWidth: 2,
+              fill: true,
+              tension: 0.32
+            },
+            {
+              label: "1RM estimado",
+              data: exerciseSeries.map((point) => point.oneRm),
+              borderColor: "#ffd365",
+              borderWidth: 2,
+              borderDash: [7, 7],
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              pointBackgroundColor: "#ffd365",
+              fill: false,
+              tension: 0.24
+            }
+          ]
         },
-        options: chartOptions("kg")
+        options: lineChartOptions("kg")
       });
 
-      const cardioSeries = getCardioWeeklySeries();
-      chartRefs.cardio = new Chart(cardioCanvas, {
-        type: "bar",
-        data: {
-          labels: cardioSeries.map((point) => point.label),
-          datasets: [{
-            label: "Minutos de cardio",
-            data: cardioSeries.map((point) => point.minutes),
-            backgroundColor: "rgba(49, 199, 255, 0.7)",
-            borderRadius: 12,
-            borderSkipped: false
-          }]
-        },
-        options: chartOptions("min")
-      });
+      if (cardioCanvas) {
+        const cardioSeries = getCardioChartSummary().visibleSeries;
+        const cardioCtx = cardioCanvas.getContext("2d");
+        const cardioGradient = cardioCtx.createLinearGradient(0, 0, 0, 280);
+        cardioGradient.addColorStop(0, "rgba(49, 199, 255, 0.86)");
+        cardioGradient.addColorStop(1, "rgba(49, 199, 255, 0.22)");
+
+        chartRefs.cardio = new Chart(cardioCanvas, {
+          type: "bar",
+          data: {
+            labels: cardioSeries.map((point) => point.label),
+            datasets: [{
+              label: "Minutos de cardio",
+              data: cardioSeries.map((point) => point.minutes),
+              backgroundColor: cardioGradient,
+              borderColor: "#31c7ff",
+              borderWidth: 1.4,
+              borderRadius: 12,
+              borderSkipped: false
+            }]
+          },
+          options: barChartOptions("min")
+        });
+      }
+
+      if (cardioMixCanvas) {
+        const cardioMixSummary = getCardioChartSummary();
+        const mixData = cardioMixSummary.machineBreakdown.slice(0, 5);
+        if (mixData.length) {
+          chartRefs.cardioMix = new Chart(cardioMixCanvas, {
+            type: "doughnut",
+            data: {
+              labels: mixData.map((item) => item.name),
+              datasets: [{
+                data: mixData.map((item) => item.minutes),
+                backgroundColor: ["#16f0a4", "#31c7ff", "#ffd365", "#ff7a4f", "#ff5f7f"],
+                borderColor: "#09111f",
+                borderWidth: 3,
+                hoverOffset: 8
+              }]
+            },
+            options: doughnutChartOptions()
+          });
+        }
+      }
     }
 
-    function chartOptions(unit) {
+    function baseChartOptions() {
       return {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {
             labels: {
-              color: "#dfe8ff"
+              color: "#dfe8ff",
+              usePointStyle: true,
+              boxWidth: 10,
+              padding: 18
             }
+          },
+          tooltip: {
+            backgroundColor: "rgba(6, 11, 20, 0.92)",
+            borderColor: "rgba(255,255,255,0.08)",
+            borderWidth: 1,
+            titleColor: "#f3f7ff",
+            bodyColor: "#dfe8ff",
+            padding: 12,
+            displayColors: true
+          }
+        }
+      };
+    }
+
+    function lineChartOptions(unit) {
+      return {
+        ...baseChartOptions(),
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: "#95a5ca",
+              maxRotation: 0,
+              autoSkipPadding: 14
+            },
+            grid: {
+              color: "rgba(255,255,255,0.04)"
+            }
+          },
+          y: {
+            ticks: {
+              color: "#95a5ca",
+              callback: (value) => value + " " + unit
+            },
+            grid: {
+              color: "rgba(255,255,255,0.06)"
+            }
+          }
+        }
+      };
+    }
+
+    function barChartOptions(unit) {
+      return {
+        ...baseChartOptions(),
+        plugins: {
+          ...baseChartOptions().plugins,
+          legend: {
+            display: false
           }
         },
         scales: {
@@ -2782,6 +3267,25 @@
             },
             grid: {
               color: "rgba(255,255,255,0.06)"
+            }
+          }
+        }
+      };
+    }
+
+    function doughnutChartOptions() {
+      return {
+        ...baseChartOptions(),
+        cutout: "62%",
+        plugins: {
+          ...baseChartOptions().plugins,
+          legend: {
+            position: "bottom",
+            labels: {
+              color: "#dfe8ff",
+              usePointStyle: true,
+              boxWidth: 10,
+              padding: 16
             }
           }
         }
@@ -2949,6 +3453,15 @@
         if (confirmDeleteProfile) {
           deleteActiveProfile();
         }
+        return;
+      }
+
+      if (action === "set-chart-window") {
+        const nextWindow = actionEl.dataset.chartWindow;
+        if (!nextWindow || nextWindow === state.ui.chartWindow) return;
+        state.ui.chartWindow = nextWindow;
+        persistState();
+        render();
         return;
       }
 
