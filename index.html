@@ -545,6 +545,37 @@
       margin-top: 10px;
     }
 
+    .previous-session-box {
+      margin-bottom: 14px;
+      padding: 14px 15px;
+      border-radius: 16px;
+      border: 1px solid rgba(22, 240, 164, 0.12);
+      background: linear-gradient(145deg, rgba(22, 240, 164, 0.08), rgba(49, 199, 255, 0.04));
+    }
+
+    .previous-session-box span {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .previous-session-box strong {
+      display: block;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    .previous-session-box small {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
     .tag {
       min-height: 36px;
       padding-inline: 10px;
@@ -2083,6 +2114,38 @@
       return Object.values(map).sort((a, b) => b.bestOneRm - a.bestOneRm);
     }
 
+    function getLatestExerciseReference(exerciseId) {
+      for (const session of state.history) {
+        const exercise = (session.exercises || []).find((item) => item.id === exerciseId);
+        if (!exercise) continue;
+        const hasSeries = Array.isArray(exercise.series) && exercise.series.length;
+        const topSet = hasSeries
+          ? exercise.series.reduce((best, setEntry) => {
+              const currentWeight = num(setEntry.weight);
+              const bestWeight = num(best?.weight);
+              if (currentWeight > bestWeight) return setEntry;
+              if (currentWeight === bestWeight && num(setEntry.reps) > num(best?.reps)) return setEntry;
+              return best;
+            }, exercise.series[0])
+          : null;
+
+        const topSetLabel = topSet && (num(topSet.weight) || num(topSet.reps))
+          ? fmtNumber(num(topSet.weight), 1) + " kg x " + fmtNumber(num(topSet.reps)) + " reps"
+          : (exercise.weight || exercise.reps
+              ? fmtNumber(num(exercise.weight), 1) + " kg x " + fmtNumber(num(exercise.reps)) + " reps"
+              : "Sin peso registrado");
+
+        return {
+          savedAt: session.savedAt,
+          sessionLabel: session.muscleLabel || session.groupName || "Sesión guardada",
+          topSetLabel,
+          summary: hasSeries ? formatSeriesSummary(exercise.series) : "",
+          notes: exercise.notes || ""
+        };
+      }
+      return null;
+    }
+
     function getChartWindowLimit() {
       const rawValue = state.ui.chartWindow;
       if (rawValue === "all") return Infinity;
@@ -2472,6 +2535,7 @@
       const entry = getExerciseEntry(exercise.id);
       const stats = getExerciseStats(entry);
       const exerciseMeta = exerciseIndex[exercise.id] || exercise;
+      const latestReference = getLatestExerciseReference(exercise.id);
       const seriesHtml = entry.series.map((setEntry, index) => `
         <div class="set-row">
           <div class="set-row-head">
@@ -2511,6 +2575,15 @@
               </div>
             </div>
           </div>
+
+          ${latestReference ? `
+            <div class="previous-session-box">
+              <span>Última vez</span>
+              <strong>${escapeHtml(latestReference.topSetLabel)}</strong>
+              <small>${fmtDate(latestReference.savedAt, { day: "2-digit", month: "short" })} · ${escapeHtml(latestReference.sessionLabel)}</small>
+              ${latestReference.summary ? `<small>Series: ${escapeHtml(latestReference.summary)}</small>` : ""}
+            </div>
+          ` : ""}
 
           <div class="set-list">
             ${seriesHtml}
