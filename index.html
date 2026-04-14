@@ -369,6 +369,47 @@
       gap: 12px;
     }
 
+    .profile-selector {
+      display: grid;
+      gap: 10px;
+    }
+
+    .profile-switcher {
+      width: 100%;
+      min-height: 72px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        rgba(11, 17, 33, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      text-align: left;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .profile-switcher.active {
+      border-color: rgba(22, 240, 164, 0.48);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+      transform: translateY(-1px);
+    }
+
+    .profile-switcher strong {
+      display: block;
+      font-size: 0.98rem;
+      margin-bottom: 6px;
+    }
+
+    .profile-switcher small {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+
     .group-card {
       position: relative;
       padding: 16px;
@@ -614,6 +655,16 @@
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 16px;
+    }
+
+    .actions-bottom .button-primary {
+      flex: 1 1 100%;
+      min-height: 52px;
+    }
+
+    .actions-bottom .button-secondary,
+    .actions-bottom .button-danger {
+      flex: 1 1 180px;
     }
 
     .button {
@@ -976,8 +1027,8 @@
     /* ==============================
        Datos base de la aplicación
        ============================== */
-    const STORAGE_KEY = "gym-pulse-pwa-v2";
-    const LEGACY_STORAGE_KEYS = ["gym-pulse-pwa-v1"];
+    const STORAGE_KEY = "gym-pulse-pwa-v3";
+    const LEGACY_STORAGE_KEYS = ["gym-pulse-pwa-v2", "gym-pulse-pwa-v1"];
     const DB_NAME = "gym-pulse-db";
     const DB_VERSION = 1;
     const DB_STORE = "appState";
@@ -1202,7 +1253,52 @@
       };
     }
 
+    function createEmptyProfileFields(values = {}) {
+      return {
+        weight: values.weight ?? "",
+        height: values.height ?? "",
+        age: values.age ?? "",
+        sex: values.sex || "hombre",
+        activity: values.activity || "1.55"
+      };
+    }
+
+    function sanitizeProfileName(value) {
+      return String(value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function cloneData(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizeSessionState(currentSession) {
+      const parsedGroupIds = Array.isArray(currentSession?.groupIds)
+        ? currentSession.groupIds
+        : legacyGroupSelectionMap[currentSession?.groupId] || [];
+
+      return {
+        id: currentSession?.id || makeId(),
+        groupIds: normalizeGroupIds(parsedGroupIds),
+        startedAt: currentSession?.startedAt || new Date().toISOString(),
+        exercises: currentSession?.exercises || {},
+        cardio: currentSession?.cardio || {}
+      };
+    }
+
+    function createProfileRecord(name = "Mi perfil", values = {}) {
+      const fallbackName = sanitizeProfileName(name) || "Mi perfil";
+      return {
+        id: values.id || makeId(),
+        name: sanitizeProfileName(values.name || fallbackName) || fallbackName,
+        createdAt: values.createdAt || new Date().toISOString(),
+        profile: createEmptyProfileFields(values.profile || {}),
+        currentSession: normalizeSessionState(values.currentSession),
+        history: Array.isArray(values.history) ? values.history : []
+      };
+    }
+
     function createDefaultState() {
+      const initialProfile = createProfileRecord("Mi perfil");
       return {
         meta: {
           lastSavedAt: ""
@@ -1211,23 +1307,44 @@
           activeTab: "entrenar",
           chartExerciseId: ""
         },
-        profile: {
-          weight: "",
-          height: "",
-          age: "",
-          sex: "hombre",
-          activity: "1.55"
-        },
-        currentSession: createEmptySession([]),
-        history: []
+        activeProfileId: initialProfile.id,
+        profiles: [initialProfile],
+        profile: cloneData(initialProfile.profile),
+        currentSession: cloneData(initialProfile.currentSession),
+        history: cloneData(initialProfile.history)
       };
+    }
+
+    function normalizeProfileRecord(rawProfile, index = 0) {
+      const fallbackName = index === 0 ? "Mi perfil" : "Perfil " + (index + 1);
+      return createProfileRecord(rawProfile?.name || rawProfile?.profileName || fallbackName, {
+        id: rawProfile?.id,
+        name: rawProfile?.name || rawProfile?.profileName || fallbackName,
+        createdAt: rawProfile?.createdAt,
+        profile: rawProfile?.profile || rawProfile,
+        currentSession: rawProfile?.currentSession,
+        history: rawProfile?.history
+      });
     }
 
     function normalizeLoadedState(parsed) {
       const fallback = createDefaultState();
-      const parsedGroupIds = Array.isArray(parsed?.currentSession?.groupIds)
-        ? parsed.currentSession.groupIds
-        : legacyGroupSelectionMap[parsed?.currentSession?.groupId] || [];
+      const profiles = Array.isArray(parsed?.profiles) && parsed.profiles.length
+        ? parsed.profiles.map((rawProfile, index) => normalizeProfileRecord(rawProfile, index))
+        : [
+            normalizeProfileRecord({
+              id: parsed?.activeProfileId,
+              name: parsed?.profileName || "Mi perfil",
+              profile: parsed?.profile,
+              currentSession: parsed?.currentSession,
+              history: parsed?.history
+            }, 0)
+          ];
+
+      const activeProfileId = profiles.some((profileRecord) => profileRecord.id === parsed?.activeProfileId)
+        ? parsed.activeProfileId
+        : profiles[0].id;
+      const activeProfile = profiles.find((profileRecord) => profileRecord.id === activeProfileId) || profiles[0];
 
       return {
         meta: {
@@ -1237,22 +1354,138 @@
           activeTab: parsed?.ui?.activeTab || fallback.ui.activeTab,
           chartExerciseId: parsed?.ui?.chartExerciseId || fallback.ui.chartExerciseId
         },
-        profile: {
-          weight: parsed?.profile?.weight ?? "",
-          height: parsed?.profile?.height ?? "",
-          age: parsed?.profile?.age ?? "",
-          sex: parsed?.profile?.sex || "hombre",
-          activity: parsed?.profile?.activity || "1.55"
-        },
-        currentSession: {
-          id: parsed?.currentSession?.id || makeId(),
-          groupIds: normalizeGroupIds(parsedGroupIds),
-          startedAt: parsed?.currentSession?.startedAt || new Date().toISOString(),
-          exercises: parsed?.currentSession?.exercises || {},
-          cardio: parsed?.currentSession?.cardio || {}
-        },
-        history: Array.isArray(parsed?.history) ? parsed.history : []
+        activeProfileId,
+        profiles,
+        profile: cloneData(activeProfile.profile),
+        currentSession: cloneData(activeProfile.currentSession),
+        history: cloneData(activeProfile.history)
       };
+    }
+
+    function ensureProfilesStructure() {
+      if (Array.isArray(state.profiles) && state.profiles.length) {
+        return state.profiles[0];
+      }
+      const fallbackProfile = createProfileRecord("Mi perfil", {
+        profile: state.profile,
+        currentSession: state.currentSession,
+        history: state.history
+      });
+      state.profiles = [fallbackProfile];
+      state.activeProfileId = fallbackProfile.id;
+      state.profile = cloneData(fallbackProfile.profile);
+      state.currentSession = cloneData(fallbackProfile.currentSession);
+      state.history = cloneData(fallbackProfile.history);
+      return fallbackProfile;
+    }
+
+    function getProfileRecord(profileId = state.activeProfileId) {
+      ensureProfilesStructure();
+      return state.profiles.find((profileRecord) => profileRecord.id === profileId) || state.profiles[0];
+    }
+
+    function getActiveProfileName() {
+      return getProfileRecord()?.name || "Mi perfil";
+    }
+
+    function applyProfileRecord(profileRecord) {
+      state.activeProfileId = profileRecord.id;
+      state.profile = cloneData(profileRecord.profile);
+      state.currentSession = cloneData(profileRecord.currentSession);
+      state.history = cloneData(profileRecord.history);
+
+      if (state.ui.chartExerciseId) {
+        const hasChartData = state.history.some((session) =>
+          (session.exercises || []).some((exercise) => exercise.id === state.ui.chartExerciseId)
+        );
+        if (!hasChartData) {
+          state.ui.chartExerciseId = "";
+        }
+      }
+    }
+
+    function syncActiveProfileToCollection() {
+      ensureProfilesStructure();
+      const currentIndex = state.profiles.findIndex((profileRecord) => profileRecord.id === state.activeProfileId);
+      const existingRecord = currentIndex >= 0 ? state.profiles[currentIndex] : createProfileRecord("Mi perfil");
+      const nextRecord = {
+        ...existingRecord,
+        id: state.activeProfileId || existingRecord.id || makeId(),
+        name: sanitizeProfileName(existingRecord.name) || "Mi perfil",
+        createdAt: existingRecord.createdAt || new Date().toISOString(),
+        profile: createEmptyProfileFields(state.profile || {}),
+        currentSession: normalizeSessionState(state.currentSession),
+        history: Array.isArray(state.history) ? cloneData(state.history) : []
+      };
+
+      if (currentIndex >= 0) {
+        state.profiles[currentIndex] = nextRecord;
+      } else {
+        state.activeProfileId = nextRecord.id;
+        state.profiles.unshift(nextRecord);
+      }
+      return nextRecord;
+    }
+
+    function getNextProfileName() {
+      ensureProfilesStructure();
+      const takenNames = new Set(state.profiles.map((profileRecord) => sanitizeProfileName(profileRecord.name).toLowerCase()));
+      let nextIndex = Math.max(2, state.profiles.length + 1);
+      let candidate = "Perfil " + nextIndex;
+      while (takenNames.has(candidate.toLowerCase())) {
+        nextIndex += 1;
+        candidate = "Perfil " + nextIndex;
+      }
+      return candidate;
+    }
+
+    function activateProfile(profileId) {
+      syncActiveProfileToCollection();
+      const nextProfile = getProfileRecord(profileId);
+      if (!nextProfile) return;
+      applyProfileRecord(nextProfile);
+      persistState();
+      render();
+      showToast("Perfil activo: " + nextProfile.name);
+    }
+
+    function createNewProfile(profileName) {
+      syncActiveProfileToCollection();
+      const nextProfile = createProfileRecord(sanitizeProfileName(profileName) || getNextProfileName());
+      state.profiles.unshift(nextProfile);
+      applyProfileRecord(nextProfile);
+      state.ui.activeTab = "perfil";
+      persistState();
+      render();
+      showToast("Perfil creado correctamente.");
+    }
+
+    function renameActiveProfile(profileName) {
+      const cleanName = sanitizeProfileName(profileName);
+      if (!cleanName) {
+        showToast("Escribe un nombre válido para el perfil.");
+        return;
+      }
+      const activeProfile = syncActiveProfileToCollection();
+      activeProfile.name = cleanName;
+      persistState();
+      render();
+      showToast("Perfil actualizado.");
+    }
+
+    function deleteActiveProfile() {
+      ensureProfilesStructure();
+      if (state.profiles.length === 1) {
+        showToast("Necesitas al menos un perfil guardado.");
+        return;
+      }
+      syncActiveProfileToCollection();
+      const remainingProfiles = state.profiles.filter((profileRecord) => profileRecord.id !== state.activeProfileId);
+      state.profiles = remainingProfiles;
+      applyProfileRecord(remainingProfiles[0]);
+      persistState();
+      render();
+      showToast("Perfil eliminado.");
     }
 
     function loadState() {
@@ -1281,13 +1514,14 @@
     }
 
     function buildPersistableState() {
-      return JSON.parse(JSON.stringify({
+      syncActiveProfileToCollection();
+      return cloneData({
         ...state,
         meta: {
           ...(state.meta || {}),
           lastSavedAt: new Date().toISOString()
         }
-      }));
+      });
     }
 
     function getSavedAtTimestamp(candidateState) {
@@ -1882,6 +2116,7 @@
       const summary = getCurrentSessionSummary();
       const profileReady = num(state.profile.weight) > 0;
       const exerciseCount = getSessionExerciseIds().length;
+      const activeProfileName = getActiveProfileName();
 
       heroTitle.textContent = sessionLabel || "Combina los grupos musculares del día";
       heroSubtitle.textContent = selectedGroups.length
@@ -1895,8 +2130,8 @@
       heroCardio.textContent = fmtNumber(summary.cardioMinutes) + " min";
       heroCardioDetail.textContent = summary.activeCardioMachines + " máquinas activas";
       headerStatus.innerHTML = profileReady
-        ? "<strong>Perfil listo</strong>"
-        : "<strong>Completa perfil</strong>";
+        ? "<strong>" + escapeHtml(activeProfileName) + "</strong> · Perfil listo"
+        : "<strong>" + escapeHtml(activeProfileName) + "</strong> · Completa perfil";
     }
 
     function renderTrainingView() {
@@ -1972,10 +2207,6 @@
               <small>Ve a la pestaña Cardio para completar la sesión.</small>
             </article>
           </div>
-          <div class="actions">
-            <button type="button" class="button button-primary" data-action="save-session">Guardar entreno</button>
-            <button type="button" class="button button-secondary" data-action="reset-session">Nueva sesión</button>
-          </div>
         </section>
 
         <section class="section-card panel">
@@ -1987,6 +2218,8 @@
           </div>
           ${exerciseSections}
         </section>
+
+        ${renderSessionFooter("Guarda el entreno completo de " + getActiveProfileName() + " cuando termines tus ejercicios y el cardio.")}
       `;
     }
 
@@ -2082,10 +2315,6 @@
               <small>Pesas + cardio de la sesión actual.</small>
             </article>
           </div>
-          <div class="actions">
-            <button type="button" class="button button-primary" data-action="save-session">Guardar entreno</button>
-            <button type="button" class="button button-secondary" data-action="reset-session">Nueva sesión</button>
-          </div>
         </section>
 
         <section class="section-card panel">
@@ -2099,6 +2328,8 @@
             ${cardioMachines.map(renderCardioCard).join("")}
           </div>
         </section>
+
+        ${renderSessionFooter("Guarda aquí la sesión completa si has terminado el cardio o si hoy haces solo máquinas.")}
       `;
     }
 
@@ -2151,12 +2382,38 @@
       `;
     }
 
+    function renderSessionFooter(description) {
+      const summary = getCurrentSessionSummary();
+      return `
+        <section class="section-card panel">
+          <div class="section-head">
+            <div>
+              <h3>Finalizar sesión</h3>
+              <p>${escapeHtml(description)}</p>
+            </div>
+            <span class="tag">${fmtNumber(summary.totalCalories)} kcal</span>
+          </div>
+          <div class="history-metrics">
+            <span class="metric-pill"><strong>${fmtNumber(summary.totalCalories)} kcal</strong> total</span>
+            <span class="metric-pill"><strong>${fmtNumber(summary.totalVolume)} kg</strong> volumen</span>
+            <span class="metric-pill"><strong>${fmtNumber(summary.cardioMinutes)} min</strong> cardio</span>
+            <span class="metric-pill"><strong>${escapeHtml(getActiveProfileName())}</strong> perfil activo</span>
+          </div>
+          <div class="actions actions-bottom">
+            <button type="button" class="button button-primary" data-action="save-session">Finalizar y guardar</button>
+            <button type="button" class="button button-secondary" data-action="reset-session">Vaciar sesión actual</button>
+          </div>
+        </section>
+      `;
+    }
+
     function renderHistoryView() {
+      const activeProfileName = getActiveProfileName();
       if (!state.history.length) {
         return `
           <section class="section-card panel">
             <div class="empty-state">
-              El historial aparecerá aquí cuando guardes tu primer entrenamiento.
+              El historial de ${escapeHtml(activeProfileName)} aparecerá aquí cuando guardes tu primer entrenamiento.
             </div>
           </section>
         `;
@@ -2183,7 +2440,7 @@
           <div class="section-head">
             <div>
               <h2>Historial</h2>
-              <p>Entrenamientos guardados por día con ejercicios, cardio y calorías totales.</p>
+              <p>Entrenamientos guardados por día para ${escapeHtml(activeProfileName)}, con ejercicios, cardio y calorías totales.</p>
             </div>
             <span class="tag">${state.history.length} sesiones</span>
           </div>
@@ -2248,11 +2505,12 @@
     }
 
     function renderChartsView() {
+      const activeProfileName = getActiveProfileName();
       if (!state.history.length) {
         return `
           <section class="section-card panel">
             <div class="empty-state">
-              Guarda entrenamientos para desbloquear las gráficas de progreso.
+              Guarda entrenamientos en ${escapeHtml(activeProfileName)} para desbloquear las gráficas de progreso.
             </div>
           </section>
         `;
@@ -2269,7 +2527,7 @@
           <div class="section-head">
             <div>
               <h2>Gráficas de progreso</h2>
-              <p>Peso máximo por sesión para cada ejercicio y volumen semanal de cardio.</p>
+              <p>Peso máximo por sesión y volumen semanal de cardio dentro del perfil ${escapeHtml(activeProfileName)}.</p>
             </div>
             <span class="tag">${state.history.length} sesiones</span>
           </div>
@@ -2304,14 +2562,52 @@
       const metrics = getProfileMetrics();
       const summary = getCurrentSessionSummary();
       const records = getBestRecordsFromHistory().slice(0, 12);
+      const activeProfile = getProfileRecord();
+      const profilesHtml = state.profiles.map((profileRecord) => {
+        const profileWeight = num(profileRecord.profile?.weight);
+        const weightLabel = profileWeight ? fmtNumber(profileWeight, 1) + " kg" : "Sin peso";
+        return `
+          <button
+            type="button"
+            class="profile-switcher ${profileRecord.id === state.activeProfileId ? "active" : ""}"
+            data-action="switch-profile"
+            data-profile-id="${profileRecord.id}"
+          >
+            <div>
+              <strong>${escapeHtml(profileRecord.name)}</strong>
+              <small>${profileRecord.history.length} sesiones · ${escapeHtml(weightLabel)}</small>
+            </div>
+            <span class="tag">${profileRecord.id === state.activeProfileId ? "Activo" : "Abrir"}</span>
+          </button>
+        `;
+      }).join("");
 
       return `
+        <section class="section-card panel">
+          <div class="section-head">
+            <div>
+              <h2>Perfiles guardados</h2>
+              <p>Cada perfil mantiene sus medidas, su sesión actual, el historial y las gráficas por separado.</p>
+            </div>
+            <span class="tag">${state.profiles.length} perfiles</span>
+          </div>
+          <div class="profile-selector">
+            ${profilesHtml}
+          </div>
+          <div class="actions">
+            <button type="button" class="button button-primary" data-action="new-profile">Nuevo perfil</button>
+            <button type="button" class="button button-secondary" data-action="rename-profile">Renombrar</button>
+            ${state.profiles.length > 1 ? '<button type="button" class="button button-danger" data-action="delete-profile">Eliminar perfil</button>' : ""}
+          </div>
+        </section>
+
         <section class="section-card panel">
           <div class="section-head">
             <div>
               <h2>Perfil y cálculos</h2>
               <p>Introduce tus datos para calcular IMC, TMB, calorías diarias y estimaciones del entreno.</p>
             </div>
+            <span class="tag">${escapeHtml(activeProfile.name)}</span>
           </div>
 
           <div class="field-grid">
@@ -2498,6 +2794,7 @@
     function saveCurrentSession() {
       const selectedGroups = getSelectedGroups(state.currentSession);
       const sessionLabel = selectedGroups.length ? selectedGroups.map((group) => group.name).join(" + ") : "Solo cardio";
+      const activeProfileName = getActiveProfileName();
       const currentExerciseIds = getSessionExerciseIds();
       const exerciseEntries = currentExerciseIds
         .map((exerciseId) => ({ exerciseId, entry: state.currentSession.exercises[exerciseId] }))
@@ -2561,11 +2858,16 @@
         id: makeId(),
         savedAt: new Date().toISOString(),
         dayKey: getLocalDayKey(),
+        profileId: state.activeProfileId,
+        profileName: activeProfileName,
         groupId: selectedGroups.length === 1 ? selectedGroups[0].id : null,
         groupIds: selectedGroups.map((group) => group.id),
         groupName: sessionLabel,
         muscleLabel: sessionLabel,
-        profileSnapshot: { ...state.profile },
+        profileSnapshot: {
+          ...state.profile,
+          name: activeProfileName
+        },
         exercises: exerciseEntries,
         cardio: cardioEntries,
         caloriesWeights,
@@ -2584,7 +2886,7 @@
 
       persistState();
       render();
-      showToast("Entrenamiento guardado en el historial.");
+      showToast("Entrenamiento guardado en " + activeProfileName + ".");
     }
 
     function resetSession() {
@@ -2618,6 +2920,38 @@
       if (!actionEl) return;
       const action = actionEl.dataset.action;
 
+      if (action === "switch-profile") {
+        const targetProfileId = actionEl.dataset.profileId;
+        if (!targetProfileId || targetProfileId === state.activeProfileId) return;
+        activateProfile(targetProfileId);
+        return;
+      }
+
+      if (action === "new-profile") {
+        const suggestedName = getNextProfileName();
+        const profileName = window.prompt("Nombre del nuevo perfil", suggestedName);
+        if (profileName == null) return;
+        createNewProfile(profileName || suggestedName);
+        return;
+      }
+
+      if (action === "rename-profile") {
+        const currentName = getActiveProfileName();
+        const profileName = window.prompt("Nuevo nombre para el perfil", currentName);
+        if (profileName == null) return;
+        renameActiveProfile(profileName);
+        return;
+      }
+
+      if (action === "delete-profile") {
+        const currentName = getActiveProfileName();
+        const confirmDeleteProfile = window.confirm("¿Eliminar el perfil \"" + currentName + "\"? Se borrarán sus datos y su historial.");
+        if (confirmDeleteProfile) {
+          deleteActiveProfile();
+        }
+        return;
+      }
+
       if (action === "toggle-group") {
         const nextGroupId = actionEl.dataset.groupId;
         const currentGroupIds = normalizeGroupIds(state.currentSession.groupIds);
@@ -2640,6 +2974,7 @@
 
         persistState();
         render();
+        return;
       }
 
       if (action === "add-set") {
@@ -2647,6 +2982,7 @@
         entry.series.push(createExerciseSet());
         persistState();
         render();
+        return;
       }
 
       if (action === "duplicate-set") {
@@ -2656,6 +2992,7 @@
         entry.series.splice(setIndex + 1, 0, createExerciseSet(entry.series[setIndex]));
         persistState();
         render();
+        return;
       }
 
       if (action === "remove-set") {
@@ -2669,10 +3006,12 @@
         }
         persistState();
         render();
+        return;
       }
 
       if (action === "save-session") {
         saveCurrentSession();
+        return;
       }
 
       if (action === "reset-session") {
@@ -2684,6 +3023,7 @@
         if (confirmReset) {
           resetSession();
         }
+        return;
       }
 
       if (action === "delete-session") {
@@ -2692,6 +3032,7 @@
         if (confirmDelete) {
           deleteSession(sessionId);
         }
+        return;
       }
     });
 
