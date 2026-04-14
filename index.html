@@ -1900,7 +1900,11 @@
     }
 
     function getExerciseEntry(exerciseId) {
-      state.currentSession.exercises[exerciseId] = normalizeExerciseEntry(state.currentSession.exercises[exerciseId], true);
+      if (!state.currentSession.exercises[exerciseId]) {
+        state.currentSession.exercises[exerciseId] = createInitialExerciseEntry(exerciseId);
+      } else {
+        state.currentSession.exercises[exerciseId] = normalizeExerciseEntry(state.currentSession.exercises[exerciseId], true);
+      }
       return state.currentSession.exercises[exerciseId];
     }
 
@@ -1940,6 +1944,42 @@
         normalizedEntry.series = [createExerciseSet()];
       }
       return normalizedEntry;
+    }
+
+    function getLatestExercisePrefill(exerciseId) {
+      for (const session of state.history) {
+        const exercise = (session.exercises || []).find((item) => item.id === exerciseId);
+        if (!exercise) continue;
+
+        const firstSavedSet = Array.isArray(exercise.series) && exercise.series.length
+          ? exercise.series[0]
+          : null;
+
+        if (firstSavedSet) {
+          return createExerciseSet({
+            reps: firstSavedSet.reps ?? "",
+            weight: firstSavedSet.weight ?? "",
+            rest: firstSavedSet.rest ?? ""
+          });
+        }
+
+        if (exercise.weight || exercise.reps || exercise.rest) {
+          return createExerciseSet({
+            reps: exercise.reps ?? "",
+            weight: exercise.weight ?? "",
+            rest: exercise.rest ?? ""
+          });
+        }
+      }
+
+      return createExerciseSet();
+    }
+
+    function createInitialExerciseEntry(exerciseId) {
+      return {
+        notes: "",
+        series: [getLatestExercisePrefill(exerciseId)]
+      };
     }
 
     function getCardioEntry(machineId) {
